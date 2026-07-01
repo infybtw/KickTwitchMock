@@ -1,8 +1,8 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /app
-COPY ./twitch-mock/go.mod ./twitch-mock/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
-COPY ./twitch-mock/ .
+COPY . .
 RUN go build -o twitch-mock ./cmd/main.go
 
 FROM alpine:latest

@@ -1,6 +1,7 @@
 services:
   twitch-mock:
       container_name: twitch-mock
+      image: ghcr.io/infybtw/twitchkickmock
       build:
         context: .
         dockerfile: Dockerfile
