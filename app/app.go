@@ -11,6 +11,7 @@ import (
 	"github.com/twirapp/twir/apps/twitch-mock/internal/config"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/handlers"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/state"
+	"github.com/twirapp/twir/apps/twitch-mock/internal/webhook"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/websocket"
 	"go.uber.org/fx"
 )
@@ -22,6 +23,7 @@ var Module = fx.Options(
 		},
 		config.New,
 		state.New,
+		webhook.New,
 		handlers.New,
 		websocket.New,
 		admin.New,

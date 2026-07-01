@@ -18,6 +18,7 @@ import (
 	"github.com/twirapp/twir/apps/twitch-mock/internal/config"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/handlers"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/state"
+	"github.com/twirapp/twir/apps/twitch-mock/internal/webhook"
 	twitchws "github.com/twirapp/twir/apps/twitch-mock/internal/websocket"
 )
 
@@ -38,7 +39,8 @@ func newHandlerServer(t *testing.T) (*httptest.Server, *state.State) {
 	t.Helper()
 	st := state.New()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := handlers.New(newTestConfig(), st, logger)
+	wh := webhook.New(logger)
+	srv := handlers.New(newTestConfig(), st, wh, logger)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts, st
@@ -47,7 +49,8 @@ func newHandlerServer(t *testing.T) (*httptest.Server, *state.State) {
 func newAdminServer(t *testing.T, st *state.State, ws *twitchws.Server) *httptest.Server {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	srv := admin.New(st, logger, ws)
+	wh := webhook.New(logger)
+	srv := admin.New(st, logger, ws, wh)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts
@@ -931,5 +934,341 @@ func TestAdminIndex(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 for admin index, got %d", resp.StatusCode)
+	}
+}
+
+func TestKickTokenClientCredentials(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := postForm(t, ts.URL+"/kick/oauth/token", url.Values{
+		"grant_type": {"client_credentials"},
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]any
+	decodeJSON(t, resp, &body)
+
+	if body["access_token"] != config.MockKickAppToken {
+		t.Fatalf("expected access_token=%q, got %v", config.MockKickAppToken, body["access_token"])
+	}
+	if body["token_type"] != "bearer" {
+		t.Fatalf("expected token_type=bearer, got %v", body["token_type"])
+	}
+	expIn, ok := body["expires_in"].(float64)
+	if !ok || expIn != 99999999 {
+		t.Fatalf("expected expires_in=99999999, got %v", body["expires_in"])
+	}
+}
+
+func TestKickTokenAuthorizationCode(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := postForm(t, ts.URL+"/kick/oauth/token", url.Values{
+		"grant_type": {"authorization_code"},
+		"code":       {"mock_code"},
+	})
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]any
+	decodeJSON(t, resp, &body)
+
+	if body["access_token"] != config.MockKickUserToken {
+		t.Fatalf("expected access_token=%q, got %v", config.MockKickUserToken, body["access_token"])
+	}
+	if body["refresh_token"] != "mock-kick-refresh" {
+		t.Fatalf("expected refresh_token=mock-kick-refresh, got %v", body["refresh_token"])
+	}
+}
+
+func TestKickTokenUnsupportedGrantType(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := postForm(t, ts.URL+"/kick/oauth/token", url.Values{
+		"grant_type": {"unknown"},
+	})
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.StatusCode)
+	}
+}
+
+func TestKickUsersDefault(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := httpGet(t, ts.URL+"/kick/public/v1/users", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data    []map[string]any `json:"data"`
+		Message string           `json:"message"`
+	}
+	decodeJSON(t, resp, &body)
+
+	if body.Message != "OK" {
+		t.Fatalf("expected message=OK, got %v", body.Message)
+	}
+	if len(body.Data) == 0 {
+		t.Fatal("expected at least one user")
+	}
+	if body.Data[0]["name"] != config.MockBroadcasterName {
+		t.Fatalf("expected name=%q, got %v", config.MockBroadcasterName, body.Data[0]["name"])
+	}
+}
+
+func TestKickUsersByID(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := httpGet(t, ts.URL+"/kick/public/v1/users?id=11111", nil)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data    []map[string]any `json:"data"`
+		Message string           `json:"message"`
+	}
+	decodeJSON(t, resp, &body)
+
+	if len(body.Data) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(body.Data))
+	}
+	userID, ok := body.Data[0]["user_id"].(float64)
+	if !ok || int(userID) != 11111 {
+		t.Fatalf("expected user_id=11111, got %v", body.Data[0]["user_id"])
+	}
+}
+
+func TestKickUsersMultipleIDs(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := httpGet(t, ts.URL+"/kick/public/v1/users?id=11111&id=22222", nil)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data []map[string]any `json:"data"`
+	}
+	decodeJSON(t, resp, &body)
+
+	if len(body.Data) != 2 {
+		t.Fatalf("expected 2 users, got %d", len(body.Data))
+	}
+}
+
+func TestKickAuthorize(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	client := &http.Client{
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/kick/oauth/authorize?state=test123&response_type=code", nil)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET authorize: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302, got %d", resp.StatusCode)
+	}
+
+	location := resp.Header.Get("Location")
+	if !strings.Contains(location, "code=mock_kick_code") {
+		t.Fatalf("expected code=mock_kick_code in Location, got %q", location)
+	}
+	if !strings.Contains(location, "state=test123") {
+		t.Fatalf("expected state=test123 in Location, got %q", location)
+	}
+}
+
+func TestKickIntrospect(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := httpPost(t, ts.URL+"/kick/public/v1/token/introspect", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data struct {
+			Active bool   `json:"active"`
+			Message string `json:"message"`
+		} `json:"data"`
+		Message string `json:"message"`
+	}
+	decodeJSON(t, resp, &body)
+
+	if body.Message != "OK" {
+		t.Fatalf("expected message=OK, got %v", body.Message)
+	}
+}
+
+func TestKickLivestreamsOffline(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := httpGet(t, ts.URL+"/kick/public/v1/livestreams", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data    []any  `json:"data"`
+		Message string `json:"message"`
+	}
+	decodeJSON(t, resp, &body)
+	if len(body.Data) != 0 {
+		t.Fatalf("expected empty data for offline stream, got %d", len(body.Data))
+	}
+}
+
+func TestKickLivestreamsOnline(t *testing.T) {
+	ts, st := newHandlerServer(t)
+	st.SetStreamOnline(true)
+
+	resp := httpGet(t, ts.URL+"/kick/public/v1/livestreams", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data []map[string]any `json:"data"`
+	}
+	decodeJSON(t, resp, &body)
+	if len(body.Data) == 0 {
+		t.Fatal("expected stream data when online")
+	}
+	if body.Data[0]["is_live"] != true {
+		t.Fatalf("expected is_live=true, got %v", body.Data[0]["is_live"])
+	}
+}
+
+func TestKickChannels(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := httpGet(t, ts.URL+"/kick/public/v1/channels", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data    []map[string]any `json:"data"`
+		Message string           `json:"message"`
+	}
+	decodeJSON(t, resp, &body)
+	if len(body.Data) == 0 {
+		t.Fatal("expected channel data")
+	}
+	if body.Data[0]["broadcaster_user_id"] != float64(config.MockKickBroadcasterID) {
+		t.Fatalf("expected broadcaster_user_id=%d, got %v", config.MockKickBroadcasterID, body.Data[0]["broadcaster_user_id"])
+	}
+}
+
+func TestKickChat(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	body := map[string]any{
+		"broadcaster_user_id": config.MockKickBroadcasterID,
+		"content":             "hello world",
+		"type":                "user",
+	}
+	resp := httpPost(t, ts.URL+"/kick/public/v1/chat", body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Data struct {
+			IsSent    bool   `json:"is_sent"`
+			MessageID string `json:"message_id"`
+		} `json:"data"`
+		Message string `json:"message"`
+	}
+	decodeJSON(t, resp, &result)
+	if !result.Data.IsSent {
+		t.Fatal("expected is_sent=true")
+	}
+	if result.Data.MessageID == "" {
+		t.Fatal("expected non-empty message_id")
+	}
+}
+
+func TestKickModerationBans(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	body := map[string]any{
+		"broadcaster_user_id": config.MockKickBroadcasterID,
+		"user_id":             11111,
+		"reason":              "test ban",
+	}
+	resp := httpPost(t, ts.URL+"/kick/public/v1/moderation/bans", body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var result struct {
+		Message string `json:"message"`
+	}
+	decodeJSON(t, resp, &result)
+	if result.Message != "OK" {
+		t.Fatalf("expected message=OK, got %v", result.Message)
+	}
+}
+
+func TestKickModerationUnban(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	body := map[string]any{
+		"broadcaster_user_id": config.MockKickBroadcasterID,
+		"user_id":             11111,
+	}
+	reqBody, _ := json.Marshal(body)
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/kick/public/v1/moderation/bans", bytes.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestKickCategories(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+
+	resp := httpGet(t, ts.URL+"/kick/public/v1/categories?q=Just+Chatting", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Data    []map[string]any `json:"data"`
+		Message string           `json:"message"`
+	}
+	decodeJSON(t, resp, &body)
+	if len(body.Data) == 0 {
+		t.Fatal("expected categories data")
+	}
+	if body.Data[0]["name"] != config.MockKickCategoryName {
+		t.Fatalf("expected name=%q, got %v", config.MockKickCategoryName, body.Data[0]["name"])
 	}
 }

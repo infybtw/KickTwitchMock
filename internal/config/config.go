@@ -12,6 +12,14 @@ const (
 	MockAppToken         = "mock-app-token"
 	MockBotToken         = "mock-bot-token"
 	MockUserToken        = "mock-user-token"
+
+	MockKickAppToken      = "mock-kick-app-token"
+	MockKickUserToken     = "mock-kick-user-token"
+	MockKickBroadcasterID = 12345
+	MockKickBotID         = 67890
+	MockKickCategoryID    = 1
+	MockKickCategoryName  = "Just Chatting"
+	MockKickChannelSlug   = "mockstreamer"
 )
 
 type Config struct {

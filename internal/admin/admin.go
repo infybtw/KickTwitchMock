@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/state"
+	"github.com/twirapp/twir/apps/twitch-mock/internal/webhook"
 	twitchws "github.com/twirapp/twir/apps/twitch-mock/internal/websocket"
 )
 
@@ -19,21 +20,23 @@ import (
 var templateFS embed.FS
 
 type Server struct {
-	state  *state.State
-	logger *slog.Logger
-	ws     *twitchws.Server
-	engine *gin.Engine
+	state   *state.State
+	logger  *slog.Logger
+	ws      *twitchws.Server
+	webhook *webhook.Sender
+	engine  *gin.Engine
 }
 
-func New(appState *state.State, logger *slog.Logger, ws *twitchws.Server) *Server {
+func New(appState *state.State, logger *slog.Logger, ws *twitchws.Server, webhookSender *webhook.Sender) *Server {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 
 	server := &Server{
-		state:  appState,
-		logger: logger,
-		ws:     ws,
-		engine: engine,
+		state:   appState,
+		logger:  logger,
+		ws:      ws,
+		webhook: webhookSender,
+		engine:  engine,
 	}
 
 	engine.GET("/admin", server.index)
@@ -44,6 +47,11 @@ func New(appState *state.State, logger *slog.Logger, ws *twitchws.Server) *Serve
 	engine.GET("/admin/state/moderators", server.getModeratorState)
 	engine.POST("/admin/state/moderators", server.setModeratorState)
 	engine.POST("/admin/trigger/:event", server.trigger)
+
+	engine.GET("/admin/kick/webhooks", server.getKickWebhooks)
+	engine.POST("/admin/kick/webhooks", server.addKickWebhook)
+	engine.DELETE("/admin/kick/webhooks/:id", server.deleteKickWebhook)
+	engine.POST("/admin/kick/trigger/:event", server.kickTrigger)
 
 	return server
 }
@@ -210,4 +218,81 @@ func normalizeIDs(values []string) []string {
 
 	sort.Strings(result)
 	return result
+}
+
+func (s *Server) getKickWebhooks(c *gin.Context) {
+	subs := s.webhook.ListSubscriptions()
+	c.JSON(http.StatusOK, gin.H{"data": subs, "message": "OK"})
+}
+
+func (s *Server) addKickWebhook(c *gin.Context) {
+	var body struct {
+		URL        string   `json:"url"`
+		EventTypes []string `json:"events"`
+		Secret     string   `json:"secret,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Bad Request"})
+		return
+	}
+
+	if body.URL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "url is required", "message": "Bad Request"})
+		return
+	}
+
+	sub := s.webhook.CreateSubscription(body.URL, body.EventTypes, body.Secret)
+	c.JSON(http.StatusOK, gin.H{"data": sub, "message": "OK"})
+}
+
+func (s *Server) deleteKickWebhook(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required", "message": "Bad Request"})
+		return
+	}
+
+	if !s.webhook.DeleteSubscription(id) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found", "message": "Not Found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "OK"})
+}
+
+func (s *Server) kickTrigger(c *gin.Context) {
+	eventType := c.Param("event")
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "message": "Bad Request"})
+		return
+	}
+
+	s.logger.Info("admin triggered kick event",
+		slog.String("event_type", eventType),
+		slog.String("body", string(body)),
+		slog.String("content_type", c.GetHeader("Content-Type")),
+		slog.String("authorization", c.GetHeader("Authorization")),
+	)
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		payload = map[string]any{"raw": string(body)}
+	}
+
+	switch eventType {
+	case "livestream.status.updated":
+		if isLive, ok := payload["is_live"].(bool); ok {
+			s.state.SetStreamOnline(isLive)
+		}
+	case "livestream.started":
+		s.state.SetStreamOnline(true)
+	case "livestream.ended":
+		s.state.SetStreamOnline(false)
+	}
+
+	s.webhook.Broadcast(eventType, payload)
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "event_type": eventType, "message": "OK"})
 }

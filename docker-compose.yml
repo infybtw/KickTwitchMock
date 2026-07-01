@@ -1,0 +1,20 @@
+services:
+  twitch-mock:
+      container_name: twitch-mock
+      build:
+        context: .
+        dockerfile: Dockerfile
+        network: host
+      ports:
+        - "7777:7777" # HTTP (OAuth + Helix)
+        - "8081:8081" # WebSocket EventSub
+        - "3333:3333" # Admin UI
+      environment:
+        - SITE_BASE_URL=${SITE_BASE_URL:-http://localhost:3005}
+      healthcheck:
+        test:
+          ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:7777/health"]
+        interval: 5s
+        timeout: 3s
+        retries: 10
+        start_period: 10s

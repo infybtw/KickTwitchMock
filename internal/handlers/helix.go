@@ -13,24 +13,27 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/config"
 	"github.com/twirapp/twir/apps/twitch-mock/internal/state"
+	"github.com/twirapp/twir/apps/twitch-mock/internal/webhook"
 )
 
 type Server struct {
-	config *config.Config
-	state  *state.State
-	logger *slog.Logger
-	engine *gin.Engine
+	config  *config.Config
+	state   *state.State
+	webhook *webhook.Sender
+	logger  *slog.Logger
+	engine  *gin.Engine
 }
 
-func New(cfg *config.Config, appState *state.State, logger *slog.Logger) *Server {
+func New(cfg *config.Config, appState *state.State, webhookSender *webhook.Sender, logger *slog.Logger) *Server {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 
 	server := &Server{
-		config: cfg,
-		state:  appState,
-		logger: logger,
-		engine: engine,
+		config:  cfg,
+		state:   appState,
+		webhook: webhookSender,
+		logger:  logger,
+		engine:  engine,
 	}
 
 	server.registerRoutes()
@@ -62,6 +65,19 @@ func (s *Server) registerRoutes() {
 	helix.POST("/chat/messages", s.chatMessages)
 	helix.GET("/moderation/moderators", s.moderators)
 	helix.POST("/moderation/bans", s.moderationBans)
+
+	kick := s.engine.Group("/kick")
+	kick.POST("/oauth/token", s.kickToken)
+	kick.GET("/oauth/authorize", s.kickAuthorize)
+	kick.POST("/public/v1/token/introspect", s.kickIntrospect)
+	kick.GET("/public/v1/users", s.kickUsers)
+	kick.GET("/public/v1/livestreams", s.kickLivestreams)
+	kick.GET("/public/v1/channels", s.kickChannels)
+	kick.POST("/public/v1/chat", s.kickChat)
+	kick.POST("/public/v1/moderation/bans", s.kickModerationBans)
+	kick.DELETE("/public/v1/moderation/bans", s.kickModerationUnban)
+	kick.GET("/public/v1/categories", s.kickCategories)
+	kick.POST("/public/v1/events/subscriptions", s.kickEventSubscriptions)
 
 	s.engine.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/helix/") {

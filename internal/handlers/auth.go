@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"net/url"
 
@@ -13,6 +14,10 @@ func (s *Server) token(c *gin.Context) {
 
 	switch grantType {
 	case "client_credentials":
+		s.logger.Info("twitch token request",
+			slog.String("grant_type", grantType),
+			slog.String("access_token", config.MockAppToken),
+		)
 		c.JSON(http.StatusOK, gin.H{
 			"access_token": config.MockAppToken,
 			"token_type":   "bearer",
@@ -20,6 +25,10 @@ func (s *Server) token(c *gin.Context) {
 			"scope":        []string{},
 		})
 	case "authorization_code", "refresh_token":
+		s.logger.Info("twitch token request",
+			slog.String("grant_type", grantType),
+			slog.String("access_token", config.MockUserToken),
+		)
 		c.JSON(http.StatusOK, gin.H{
 			"access_token":  config.MockUserToken,
 			"token_type":    "bearer",

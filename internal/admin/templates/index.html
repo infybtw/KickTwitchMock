@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>Twitch Mock Admin</title>
+		<title>Mock Admin - Twitch & Kick</title>
 		<style>
 			body {
 				font-family: sans-serif;
@@ -40,7 +40,8 @@
 				margin-bottom: 6px;
 			}
 			input,
-			textarea {
+			textarea,
+			select {
 				width: 100%;
 				background: #030712;
 				color: #f9fafb;
@@ -50,7 +51,11 @@
 				box-sizing: border-box;
 			}
 			textarea {
-				min-height: 180px;
+				min-height: 280px;
+				word-wrap: break-word;
+				overflow-wrap: break-word;
+				white-space: pre-wrap;
+				font-size: 12px;
 			}
 			input[type="checkbox"] {
 				width: auto;
@@ -58,6 +63,14 @@
 			}
 			.form-row {
 				margin-bottom: 12px;
+			}
+			.form-row-inline {
+				display: flex;
+				gap: 8px;
+				margin-bottom: 12px;
+			}
+			.form-row-inline input {
+				flex: 1;
 			}
 			.toggle-row {
 				display: flex;
@@ -77,6 +90,17 @@
 				padding: 10px 14px;
 				cursor: pointer;
 			}
+			button.danger {
+				background: #dc2626;
+			}
+			button.success {
+				background: #16a34a;
+			}
+			button.small {
+				padding: 6px 10px;
+				font-size: 12px;
+				margin-top: 0;
+			}
 			.result {
 				white-space: pre-wrap;
 				font-size: 12px;
@@ -91,203 +115,765 @@
 			.section-title {
 				margin-bottom: 16px;
 			}
+			.tabs {
+				display: flex;
+				gap: 8px;
+				margin-bottom: 24px;
+				border-bottom: 1px solid #374151;
+				padding-bottom: 8px;
+			}
+			.tab-btn {
+				padding: 10px 20px;
+				border: 1px solid #4b5563;
+				background: #1f2937;
+				color: #f9fafb;
+				border-radius: 8px 8px 0 0;
+				cursor: pointer;
+				font-size: 14px;
+				font-weight: 600;
+			}
+			.tab-btn.active-twitch {
+				background: #7c3aed;
+				border-color: #7c3aed;
+			}
+			.tab-btn.active-kick {
+				background: #16a34a;
+				border-color: #16a34a;
+			}
+			.tab-content {
+				display: none;
+			}
+			.tab-content.active {
+				display: block;
+			}
+			.webhook-list {
+				margin-top: 12px;
+				max-height: 200px;
+				overflow-y: auto;
+			}
+			.webhook-item {
+				background: #030712;
+				border: 1px solid #374151;
+				border-radius: 8px;
+				padding: 12px;
+				margin-bottom: 8px;
+				font-size: 12px;
+			}
+			.webhook-item .url {
+				color: #60a5fa;
+				word-break: break-all;
+			}
+			.webhook-item .events {
+				color: #4ade80;
+			}
+			.webhook-item .delete-btn {
+				margin-top: 8px;
+				padding: 4px 8px;
+				font-size: 11px;
+			}
+			.event-panel {
+				margin-bottom: 16px;
+			}
+			.event-panel select {
+				margin-bottom: 12px;
+			}
+			.event-panel textarea {
+				min-height: 140px;
+			}
+			.kick-events-grid {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-top: 4px;
+			}
+			.kick-event-check {
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 13px;
+				padding: 6px 10px;
+				background: #030712;
+				border: 1px solid #374151;
+				border-radius: 6px;
+				cursor: pointer;
+				max-width: 100%;
+				min-width: 0;
+			}
+			.kick-event-check:hover {
+				border-color: #4ade80;
+			}
+			.kick-event-check input {
+				width: auto;
+				margin: 0;
+				accent-color: #16a34a;
+				flex-shrink: 0;
+			}
+			.kick-event-check span {
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+			.card h2 {
+				font-size: 14px;
+				word-wrap: break-word;
+				overflow-wrap: break-word;
+			}
+			.card textarea {
+				word-wrap: break-word;
+				overflow-wrap: break-word;
+			}
 		</style>
 	</head>
 	<body>
-		<h1>Twitch Mock Admin</h1>
-		<p>POST trigger API: <code>http://localhost:3333/admin/trigger/{event_type}</code></p>
+		<h1>Mock Admin</h1>
 
-		<h2 class="section-title">Mock State Controls</h2>
-		<div class="controls-grid">
-			<form class="card" id="stream-state-form">
-				<h2>Stream State</h2>
-				<div class="toggle-row">
-					<input id="stream-online" type="checkbox" />
-					<label for="stream-online">Stream Online</label>
+		<div class="card" style="margin-bottom: 24px; border-color: #7c3aed;">
+			<h2 style="margin-top: 0;">App Tokens</h2>
+			<p style="margin: 0 0 8px;">Use these mock tokens when configuring your app. They are returned by the token endpoints.</p>
+			<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+				<div>
+					<h3 style="margin: 0 0 4px; color: #7c3aed;">Twitch</h3>
+					<code style="display: block; padding: 8px; background: #030712; border-radius: 6px; font-size: 12px;">
+						GET <a href="http://localhost:7777/oauth2/token?grant_type=client_credentials" style="color: #60a5fa;">/oauth2/token?grant_type=client_credentials</a><br>
+						App Token: <strong>mock-app-token</strong><br><br>
+						GET /oauth2/authorize?client_id=mock&amp;redirect_uri=...<br>
+						User Token: <strong>mock-user-token</strong><br>
+						Bot Token: <strong>mock-bot-token</strong>
+					</code>
 				</div>
-				<div class="form-row">
-					<label for="stream-title">Title</label>
-					<input id="stream-title" type="text" />
+				<div>
+					<h3 style="margin: 0 0 4px; color: #16a34a;">Kick</h3>
+					<code style="display: block; padding: 8px; background: #030712; border-radius: 6px; font-size: 12px;">
+						POST <a href="http://localhost:7777/kick/oauth/token" style="color: #60a5fa;">/kick/oauth/token</a><br>
+						Body: grant_type=client_credentials<br>
+						App Token: <strong>mock-kick-app-token</strong><br><br>
+						POST /kick/oauth/token<br>
+						Body: grant_type=authorization_code<br>
+						User Token: <strong>mock-kick-user-token</strong>
+					</code>
 				</div>
-				<div class="form-row">
-					<label for="stream-game-id">Category ID</label>
-					<input id="stream-game-id" type="text" />
-				</div>
-				<div class="form-row">
-					<label for="stream-game-name">Category Name</label>
-					<input id="stream-game-name" type="text" />
-				</div>
-				<div class="form-row">
-					<label for="stream-viewer-count">Viewer Count</label>
-					<input id="stream-viewer-count" type="number" min="0" />
-				</div>
-				<button type="submit">Save</button>
-				<div class="result" id="stream-state-result"></div>
-			</form>
-
-			<form class="card" id="follow-state-form">
-				<h2>Followers</h2>
-				<div class="form-row">
-					<label for="followers-total">Total Follower Count</label>
-					<input id="followers-total" type="number" min="0" />
-				</div>
-				<div class="form-row">
-					<label for="followed-user-ids">Followed User IDs (one per line)</label>
-					<textarea id="followed-user-ids"></textarea>
-				</div>
-				<button type="submit">Save</button>
-				<div class="result" id="follow-state-result"></div>
-			</form>
-
-			<form class="card" id="moderator-state-form">
-				<h2>Moderators</h2>
-				<div class="form-row">
-					<label for="moderator-ids">Moderator User IDs (one per line)</label>
-					<textarea id="moderator-ids"></textarea>
-				</div>
-				<button type="submit">Save</button>
-				<div class="result" id="moderator-state-result"></div>
-			</form>
+			</div>
 		</div>
 
-		<div class="grid">
-			<form class="card" id="chat-message-form">
-				<h2>channel.chat.message</h2>
-				<div class="form-row">
-					<label for="chat-user-id">Chatter User ID</label>
-					<input id="chat-user-id" type="text" value="99999" />
+		<div class="tabs">
+			<button class="tab-btn active-twitch" data-tab="twitch">Twitch</button>
+			<button class="tab-btn" data-tab="kick">Kick</button>
+		</div>
+
+		<div id="tab-twitch" class="tab-content active">
+			<p>POST trigger API: <code>http://localhost:3333/admin/trigger/{event_type}</code></p>
+
+			<h2 class="section-title">Mock State Controls</h2>
+			<div class="controls-grid">
+				<form class="card" id="stream-state-form">
+					<h2>Stream State</h2>
+					<div class="toggle-row">
+						<input id="stream-online" type="checkbox" />
+						<label for="stream-online">Stream Online</label>
+					</div>
+					<div class="form-row">
+						<label for="stream-title">Title</label>
+						<input id="stream-title" type="text" />
+					</div>
+					<div class="form-row">
+						<label for="stream-game-id">Category ID</label>
+						<input id="stream-game-id" type="text" />
+					</div>
+					<div class="form-row">
+						<label for="stream-game-name">Category Name</label>
+						<input id="stream-game-name" type="text" />
+					</div>
+					<div class="form-row">
+						<label for="stream-viewer-count">Viewer Count</label>
+						<input id="stream-viewer-count" type="number" min="0" />
+					</div>
+					<button type="submit">Save</button>
+					<div class="result" id="stream-state-result"></div>
+				</form>
+
+				<form class="card" id="follow-state-form">
+					<h2>Followers</h2>
+					<div class="form-row">
+						<label for="followers-total">Total Follower Count</label>
+						<input id="followers-total" type="number" min="0" />
+					</div>
+					<div class="form-row">
+						<label for="followed-user-ids">Followed User IDs (one per line)</label>
+						<textarea id="followed-user-ids"></textarea>
+					</div>
+					<button type="submit">Save</button>
+					<div class="result" id="follow-state-result"></div>
+				</form>
+
+				<form class="card" id="moderator-state-form">
+					<h2>Moderators</h2>
+					<div class="form-row">
+						<label for="moderator-ids">Moderator User IDs (one per line)</label>
+						<textarea id="moderator-ids"></textarea>
+					</div>
+					<button type="submit">Save</button>
+					<div class="result" id="moderator-state-result"></div>
+				</form>
+			</div>
+
+			<div class="grid">
+				<form class="card" id="chat-message-form">
+					<h2>channel.chat.message</h2>
+					<div class="form-row">
+						<label for="chat-user-id">Chatter User ID</label>
+						<input id="chat-user-id" type="text" value="99999" />
+					</div>
+					<div class="form-row">
+						<label for="chat-user-name">Chatter Display Name</label>
+						<input id="chat-user-name" type="text" value="Viewer" />
+					</div>
+					<div class="form-row">
+						<label for="chat-message-text">Message</label>
+						<input id="chat-message-text" type="text" value="hello mock world" />
+					</div>
+					<button type="submit">Trigger</button>
+					<div class="result" id="chat-message-result"></div>
+				</form>
+
+				<form class="card" data-event="channel.follow">
+					<h2>channel.follow</h2>
+					<textarea>{"user_id":"99999","user_login":"testfollower","user_name":"TestFollower","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","followed_at":"2026-04-12T00:00:00Z"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.subscribe">
+					<h2>channel.subscribe</h2>
+					<textarea>{"user_id":"99999","user_login":"subscriber","user_name":"Subscriber","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","tier":"1000","is_gift":false}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.raid">
+					<h2>channel.raid</h2>
+					<textarea>{"from_broadcaster_user_id":"99999","from_broadcaster_user_login":"raider","from_broadcaster_user_name":"Raider","to_broadcaster_user_id":"12345","to_broadcaster_user_login":"mockstreamer","to_broadcaster_user_name":"MockStreamer","viewers":42}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="stream.online">
+					<h2>stream.online</h2>
+					<textarea>{"id":"mock-stream-id","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","type":"live","started_at":"2026-04-12T00:00:00Z"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="stream.offline">
+					<h2>stream.offline</h2>
+					<textarea>{"broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.ban">
+					<h2>channel.ban</h2>
+					<textarea>{"user_id":"99999","user_login":"badviewer","user_name":"BadViewer","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","moderator_user_id":"67890","moderator_user_login":"mockbot","moderator_user_name":"MockBot","reason":"mock reason","banned_at":"2026-04-12T00:00:00Z"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.unban">
+					<h2>channel.unban</h2>
+					<textarea>{"user_id":"99999","user_login":"viewer","user_name":"Viewer","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","moderator_user_id":"67890","moderator_user_login":"mockbot","moderator_user_name":"MockBot"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.cheer">
+					<h2>channel.cheer</h2>
+					<textarea>{"is_anonymous":false,"user_id":"99999","user_login":"cheerer","user_name":"Cheerer","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","message":"pog","bits":500}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.prediction.begin">
+					<h2>channel.prediction.begin</h2>
+					<textarea>{"id":"prediction-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Who wins?","outcomes":[{"id":"o1","title":"Yes","color":"BLUE","users":0,"channel_points":0},{"id":"o2","title":"No","color":"PINK","users":0,"channel_points":0}],"started_at":"2026-04-12T00:00:00Z","locks_at":"2026-04-12T00:05:00Z"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.prediction.end">
+					<h2>channel.prediction.end</h2>
+					<textarea>{"id":"prediction-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Who wins?","status":"resolved","winning_outcome_id":"o1","ended_at":"2026-04-12T00:05:00Z"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.poll.begin">
+					<h2>channel.poll.begin</h2>
+					<textarea>{"id":"poll-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Best snack?","choices":[{"id":"c1","title":"Pizza","bits_votes":0,"channel_points_votes":0,"votes":0},{"id":"c2","title":"Burger","bits_votes":0,"channel_points_votes":0,"votes":0}],"started_at":"2026-04-12T00:00:00Z","ends_at":"2026-04-12T00:01:00Z"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.poll.end">
+					<h2>channel.poll.end</h2>
+					<textarea>{"id":"poll-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Best snack?","status":"completed","ended_at":"2026-04-12T00:01:00Z"}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-event="channel.channel_points_custom_reward_redemption.add">
+					<h2>channel.channel_points_custom_reward_redemption.add</h2>
+					<textarea>{"id":"reward-redemption-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","user_id":"99999","user_login":"viewer","user_name":"Viewer","user_input":"hydrate","status":"unfulfilled","redeemed_at":"2026-04-12T00:00:00Z","reward":{"id":"reward-1","title":"Hydrate","cost":1000,"prompt":"Drink water"}}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+			</div>
+		</div>
+
+		<div id="tab-kick" class="tab-content">
+			<p>POST trigger API: <code>http://localhost:3333/admin/kick/trigger/{event_type}</code></p>
+
+			<div class="card" style="margin-bottom: 24px; border-color: #f59e0b; background: #1c1917;">
+				<h2 style="margin-top: 0; color: #f59e0b;">Warning</h2>
+				<p style="margin: 0;">Your app must allow insecure (HTTP) webhook endpoints when running locally. The mock server sends webhooks to <code>http://</code> URLs. Ensure your Kick integration settings allow this.</p>
+			</div>
+
+			<h2 class="section-title">Webhook Subscriptions</h2>
+			<div class="controls-grid">
+				<form class="card" id="kick-webhook-form">
+					<h2>Add Webhook</h2>
+					<div class="form-row">
+						<label for="kick-webhook-url">Webhook URL</label>
+						<input id="kick-webhook-url" type="url" placeholder="https://your-webhook-url.com" />
+					</div>
+					<div class="form-row">
+						<label>Events</label>
+						<div class="kick-events-grid">
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="chat.message.sent" checked /><span>chat.message.sent</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="channel.followed" checked /><span>channel.followed</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="channel.subscription.new" checked /><span>channel.subscription.new</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="channel.subscription.renewal" checked /><span>channel.subscription.renewal</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="channel.subscription.gifts" checked /><span>channel.subscription.gifts</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="channel.reward.redemption.updated" checked /><span>channel.reward.redemption.updated</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="livestream.status.updated" checked /><span>livestream.status.updated</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="livestream.metadata.updated" checked /><span>livestream.metadata.updated</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="moderation.banned" checked /><span>moderation.banned</span></label>
+							<label class="kick-event-check"><input type="checkbox" name="kick-events" value="kicks.gifted" checked /><span>kicks.gifted</span></label>
+						</div>
+					</div>
+					<div class="form-row">
+						<label for="kick-webhook-secret">Secret (optional)</label>
+						<div class="form-row-inline">
+							<input id="kick-webhook-secret" type="text" placeholder="Auto-generated if empty" />
+							<button type="button" class="small success" id="kick-gen-secret-btn">Generate</button>
+						</div>
+					</div>
+					<button type="submit">Add Webhook</button>
+					<div class="result" id="kick-webhook-result"></div>
+				</form>
+
+				<div class="card">
+					<h2>Active Webhooks</h2>
+					<div id="kick-webhook-list" class="webhook-list">
+						<em>Loading...</em>
+					</div>
 				</div>
-				<div class="form-row">
-					<label for="chat-user-name">Chatter Display Name</label>
-					<input id="chat-user-name" type="text" value="Viewer" />
-				</div>
-				<div class="form-row">
-					<label for="chat-message-text">Message</label>
-					<input id="chat-message-text" type="text" value="hello mock world" />
-				</div>
-				<button type="submit">Trigger</button>
-				<div class="result" id="chat-message-result"></div>
-			</form>
+			</div>
 
-			<form class="card" data-event="channel.follow">
-				<h2>channel.follow</h2>
-				<textarea>
-{"user_id":"99999","user_login":"testfollower","user_name":"TestFollower","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","followed_at":"2026-04-12T00:00:00Z"}</textarea
-				>
+			<h2 class="section-title">Event Triggers</h2>
+			<div class="grid">
+				<form class="card" data-kick-event="chat.message.sent">
+					<h2>chat.message.sent</h2>
+					<textarea>{
+  "message_id": "msg_123",
+  "replies_to": null,
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "sender": {
+    "is_anonymous": false,
+    "user_id": 99999,
+    "username": "MockUser",
+    "is_verified": false,
+    "profile_picture": "https://example.com/sender_avatar.jpg",
+    "channel_slug": "mockuser",
+    "identity": {
+      "username_color": "#FF5733",
+      "badges": [{"text": "Subscriber", "type": "subscriber", "count": 3}]
+    }
+  },
+  "content": "hello mock world",
+  "emotes": [],
+  "created_at": "2026-07-01T00:00:00Z"
+}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-kick-event="channel.followed">
+					<h2>channel.followed</h2>
+					<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "follower": {
+    "is_anonymous": false,
+    "user_id": 99999,
+    "username": "MockFollower",
+    "is_verified": false,
+    "profile_picture": "https://example.com/sender_avatar.jpg",
+    "channel_slug": "mockfollower",
+    "identity": null
+  }
+}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-kick-event="channel.subscription.new">
+					<h2>channel.subscription.new</h2>
+					<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "subscriber": {
+    "is_anonymous": false,
+    "user_id": 99999,
+    "username": "MockSubscriber",
+    "is_verified": false,
+    "profile_picture": "https://example.com/sender_avatar.jpg",
+    "channel_slug": "mocksubscriber",
+    "identity": null
+  },
+  "duration": 1,
+  "created_at": "2026-07-01T00:00:00Z",
+  "expires_at": "2026-08-01T00:00:00Z"
+}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-kick-event="channel.subscription.renewal">
+					<h2>channel.subscription.renewal</h2>
+					<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "subscriber": {
+    "is_anonymous": false,
+    "user_id": 99999,
+    "username": "MockSubscriber",
+    "is_verified": false,
+    "profile_picture": "https://example.com/sender_avatar.jpg",
+    "channel_slug": "mocksubscriber",
+    "identity": null
+  },
+  "duration": 3,
+  "created_at": "2026-07-01T00:00:00Z",
+  "expires_at": "2026-08-01T00:00:00Z"
+}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-kick-event="channel.subscription.gifts">
+					<h2>channel.subscription.gifts</h2>
+					<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "gifter": {
+    "is_anonymous": false,
+    "user_id": 99999,
+    "username": "MockGifter",
+    "is_verified": false,
+    "profile_picture": "https://example.com/sender_avatar.jpg",
+    "channel_slug": "mockgifter",
+    "identity": null
+  },
+  "giftees": [
+    {
+      "is_anonymous": false,
+      "user_id": 88888,
+      "username": "MockGiftee",
+      "is_verified": false,
+      "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+      "channel_slug": "mockgiftee",
+      "identity": null
+    }
+  ],
+  "created_at": "2026-07-01T00:00:00Z",
+  "expires_at": "2026-08-01T00:00:00Z"
+}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+				<form class="card" data-kick-event="channel.reward.redemption.updated">
+					<h2>channel.reward.redemption.updated</h2>
+					<textarea>{
+  "id": "01KBHE78QE4HZY1617DK5FC7YD",
+  "user_input": "hydrate",
+  "status": "pending",
+  "redeemed_at": "2026-07-01T00:00:00Z",
+  "reward": {
+    "id": "01KBHE7RZNHB0SKDV1H86CD4F3",
+    "title": "Hydrate",
+    "cost": 1000,
+    "description": "Drink water"
+  },
+  "redeemer": {
+    "user_id": 99999,
+    "username": "MockUser",
+    "is_verified": false,
+    "profile_picture": "https://example.com/sender_avatar.jpg",
+    "channel_slug": "mockuser"
+  },
+  "broadcaster": {
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer"
+  }
+}</textarea>
+					<button type="submit">Trigger</button>
+					<div class="result"></div>
+				</form>
+
+			<form class="card" data-kick-event="livestream.status.updated">
+				<h2>livestream.status.updated (started)</h2>
+				<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "is_live": true,
+  "title": "Stream Title",
+  "started_at": "2025-01-01T11:00:00+11:00",
+  "ended_at": null
+}</textarea>
 				<button type="submit">Trigger</button>
 				<div class="result"></div>
 			</form>
 
-			<form class="card" data-event="channel.subscribe">
-				<h2>channel.subscribe</h2>
-				<textarea>
-{"user_id":"99999","user_login":"subscriber","user_name":"Subscriber","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","tier":"1000","is_gift":false}</textarea
-				>
+			<form class="card" data-kick-event="livestream.status.updated">
+				<h2>livestream.status.updated (ended)</h2>
+				<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "is_live": false,
+  "title": "Stream Title",
+  "started_at": "2025-01-01T11:00:00+11:00",
+  "ended_at": "2025-01-01T15:00:00+11:00"
+}</textarea>
 				<button type="submit">Trigger</button>
 				<div class="result"></div>
 			</form>
 
-			<form class="card" data-event="channel.raid">
-				<h2>channel.raid</h2>
-				<textarea>
-{"from_broadcaster_user_id":"99999","from_broadcaster_user_login":"raider","from_broadcaster_user_name":"Raider","to_broadcaster_user_id":"12345","to_broadcaster_user_login":"mockstreamer","to_broadcaster_user_name":"MockStreamer","viewers":42}</textarea
-				>
+			<form class="card" data-kick-event="livestream.metadata.updated">
+				<h2>livestream.metadata.updated</h2>
+				<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "metadata": {
+    "title": "Mock Stream",
+    "language": "en",
+    "has_mature_content": false,
+    "category": {
+      "id": 1,
+      "name": "Just Chatting",
+      "thumbnail": "http://example.com/image123"
+    }
+  }
+}</textarea>
 				<button type="submit">Trigger</button>
 				<div class="result"></div>
 			</form>
 
-			<form class="card" data-event="stream.online">
-				<h2>stream.online</h2>
-				<textarea>
-{"id":"mock-stream-id","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","type":"live","started_at":"2026-04-12T00:00:00Z"}</textarea
-				>
+			<form class="card" data-kick-event="moderation.banned">
+				<h2>moderation.banned</h2>
+				<textarea>{
+  "broadcaster": {
+    "is_anonymous": false,
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer",
+    "identity": null
+  },
+  "moderator": {
+    "is_anonymous": false,
+    "user_id": 67890,
+    "username": "MockBot",
+    "is_verified": false,
+    "profile_picture": "https://example.com/moderator_avatar.jpg",
+    "channel_slug": "mockbot",
+    "identity": null
+  },
+  "banned_user": {
+    "is_anonymous": false,
+    "user_id": 99999,
+    "username": "MockBanned",
+    "is_verified": false,
+    "profile_picture": "https://example.com/banned_user_avatar.jpg",
+    "channel_slug": "mockbanned",
+    "identity": null
+  },
+  "metadata": {
+    "reason": "spam",
+    "created_at": "2026-07-01T00:00:00Z",
+    "expires_at": null
+  }
+}</textarea>
 				<button type="submit">Trigger</button>
 				<div class="result"></div>
 			</form>
 
-			<form class="card" data-event="stream.offline">
-				<h2>stream.offline</h2>
-				<textarea>
-{"broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer"}</textarea
-				>
+			<form class="card" data-kick-event="kicks.gifted">
+				<h2>kicks.gifted</h2>
+				<textarea>{
+  "broadcaster": {
+    "user_id": 12345,
+    "username": "MockStreamer",
+    "is_verified": true,
+    "profile_picture": "https://example.com/broadcaster_avatar.jpg",
+    "channel_slug": "mockstreamer"
+  },
+  "sender": {
+    "user_id": 99999,
+    "username": "MockSender",
+    "is_verified": false,
+    "profile_picture": "https://example.com/sender_avatar.jpg",
+    "channel_slug": "mocksender"
+  },
+  "gift": {
+    "amount": 500,
+    "name": "Rage Quit",
+    "type": "LEVEL_UP",
+    "tier": "MID",
+    "message": "w",
+    "pinned_time_seconds": 600
+  },
+  "created_at": "2026-07-01T00:00:00Z"
+}</textarea>
 				<button type="submit">Trigger</button>
 				<div class="result"></div>
 			</form>
-
-			<form class="card" data-event="channel.ban">
-				<h2>channel.ban</h2>
-				<textarea>
-{"user_id":"99999","user_login":"badviewer","user_name":"BadViewer","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","moderator_user_id":"67890","moderator_user_login":"mockbot","moderator_user_name":"MockBot","reason":"mock reason","banned_at":"2026-04-12T00:00:00Z"}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
-
-			<form class="card" data-event="channel.unban">
-				<h2>channel.unban</h2>
-				<textarea>
-{"user_id":"99999","user_login":"viewer","user_name":"Viewer","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","moderator_user_id":"67890","moderator_user_login":"mockbot","moderator_user_name":"MockBot"}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
-
-			<form class="card" data-event="channel.cheer">
-				<h2>channel.cheer</h2>
-				<textarea>
-{"is_anonymous":false,"user_id":"99999","user_login":"cheerer","user_name":"Cheerer","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","message":"pog","bits":500}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
-
-			<form class="card" data-event="channel.prediction.begin">
-				<h2>channel.prediction.begin</h2>
-				<textarea>
-{"id":"prediction-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Who wins?","outcomes":[{"id":"o1","title":"Yes","color":"BLUE","users":0,"channel_points":0},{"id":"o2","title":"No","color":"PINK","users":0,"channel_points":0}],"started_at":"2026-04-12T00:00:00Z","locks_at":"2026-04-12T00:05:00Z"}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
-
-			<form class="card" data-event="channel.prediction.end">
-				<h2>channel.prediction.end</h2>
-				<textarea>
-{"id":"prediction-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Who wins?","status":"resolved","winning_outcome_id":"o1","ended_at":"2026-04-12T00:05:00Z"}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
-
-			<form class="card" data-event="channel.poll.begin">
-				<h2>channel.poll.begin</h2>
-				<textarea>
-{"id":"poll-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Best snack?","choices":[{"id":"c1","title":"Pizza","bits_votes":0,"channel_points_votes":0,"votes":0},{"id":"c2","title":"Burger","bits_votes":0,"channel_points_votes":0,"votes":0}],"started_at":"2026-04-12T00:00:00Z","ends_at":"2026-04-12T00:01:00Z"}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
-
-			<form class="card" data-event="channel.poll.end">
-				<h2>channel.poll.end</h2>
-				<textarea>
-{"id":"poll-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","title":"Best snack?","status":"completed","ended_at":"2026-04-12T00:01:00Z"}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
-
-			<form class="card" data-event="channel.channel_points_custom_reward_redemption.add">
-				<h2>channel.channel_points_custom_reward_redemption.add</h2>
-				<textarea>
-{"id":"reward-redemption-1","broadcaster_user_id":"12345","broadcaster_user_login":"mockstreamer","broadcaster_user_name":"MockStreamer","user_id":"99999","user_login":"viewer","user_name":"Viewer","user_input":"hydrate","status":"unfulfilled","redeemed_at":"2026-04-12T00:00:00Z","reward":{"id":"reward-1","title":"Hydrate","cost":1000,"prompt":"Drink water"}}</textarea
-				>
-				<button type="submit">Trigger</button>
-				<div class="result"></div>
-			</form>
+			</div>
 		</div>
 
 		<script>
+			// Tab switching
+			document.querySelectorAll(".tab-btn").forEach((btn) => {
+				btn.addEventListener("click", () => {
+					document.querySelectorAll(".tab-btn").forEach((b) => {
+						b.classList.remove("active-twitch", "active-kick");
+					});
+					document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("active"));
+					const tab = btn.dataset.tab;
+					btn.classList.add(tab === "kick" ? "active-kick" : "active-twitch");
+					document.getElementById("tab-" + tab).classList.add("active");
+				});
+			});
+
+			// Shared utilities
+			function setResult(element, message, isError = false) {
+				element.style.color = isError ? "#fca5a5" : "#cbd5e1";
+				element.textContent = message;
+			}
+
+			async function requestJSON(url, options) {
+				const response = await fetch(url, options);
+				const text = await response.text();
+				let data = null;
+				if (text) {
+					try {
+						data = JSON.parse(text);
+					} catch {
+						throw new Error(`${response.status} ${response.statusText}\n${text}`);
+					}
+				}
+				if (!response.ok) {
+					throw new Error(
+						`${response.status} ${response.statusText}\n${JSON.stringify(data ?? text, null, 2)}`,
+					);
+				}
+				return { response, data };
+			}
+
+			function idsFromTextarea(value) {
+				return value
+					.split("\n")
+					.map((item) => item.trim())
+					.filter(Boolean);
+			}
+
+			function generateUUID() {
+				return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+					const r = (Math.random() * 16) | 0;
+					return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+				});
+			}
+
+			function generateSecret() {
+				const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+				let result = "";
+				for (let i = 0; i < 32; i++) {
+					result += chars.charAt(Math.floor(Math.random() * chars.length));
+				}
+				return result;
+			}
+
+			// ===== TWITCH =====
 			const streamStateForm = document.getElementById("stream-state-form");
 			const streamOnlineInput = document.getElementById("stream-online");
 			const streamTitleInput = document.getElementById("stream-title");
@@ -304,40 +890,6 @@
 			const moderatorStateForm = document.getElementById("moderator-state-form");
 			const moderatorIdsInput = document.getElementById("moderator-ids");
 			const moderatorStateResult = document.getElementById("moderator-state-result");
-
-			function idsFromTextarea(value) {
-				return value
-					.split("\n")
-					.map((item) => item.trim())
-					.filter(Boolean);
-			}
-
-			function setResult(element, message, isError = false) {
-				element.style.color = isError ? "#fca5a5" : "#cbd5e1";
-				element.textContent = message;
-			}
-
-			async function requestJSON(url, options) {
-				const response = await fetch(url, options);
-				const text = await response.text();
-				let data = null;
-
-				if (text) {
-					try {
-						data = JSON.parse(text);
-					} catch {
-						throw new Error(`${response.status} ${response.statusText}\n${text}`);
-					}
-				}
-
-				if (!response.ok) {
-					throw new Error(
-						`${response.status} ${response.statusText}\n${JSON.stringify(data ?? text, null, 2)}`,
-					);
-				}
-
-				return { response, data };
-			}
 
 			function streamPayload() {
 				return {
@@ -368,7 +920,6 @@
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(streamPayload()),
 				});
-
 				applyStreamState(data);
 				setResult(streamStateResult, `${message}\n${JSON.stringify(data, null, 2)}`);
 			}
@@ -388,13 +939,11 @@
 					total: Number(followersTotalInput.value || 0),
 					followed_user_ids: idsFromTextarea(followedUserIdsInput.value),
 				};
-
 				const { data } = await requestJSON("/admin/state/follows", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(payload),
 				});
-
 				applyFollowState(data);
 				setResult(followStateResult, `Follower state saved\n${JSON.stringify(data, null, 2)}`);
 			}
@@ -412,13 +961,11 @@
 				const payload = {
 					moderator_ids: idsFromTextarea(moderatorIdsInput.value),
 				};
-
 				const { data } = await requestJSON("/admin/state/moderators", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(payload),
 				});
-
 				applyModeratorState(data);
 				setResult(moderatorStateResult, `Moderator state saved\n${JSON.stringify(data, null, 2)}`);
 			}
@@ -458,13 +1005,6 @@
 				}
 			});
 
-			function generateUUID() {
-				return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-					const r = (Math.random() * 16) | 0;
-					return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-				});
-			}
-
 			document.getElementById("chat-message-form").addEventListener("submit", async (event) => {
 				event.preventDefault();
 				const result = document.getElementById("chat-message-result");
@@ -500,11 +1040,9 @@
 			for (const form of document.querySelectorAll("form[data-event]")) {
 				form.addEventListener("submit", async (event) => {
 					event.preventDefault();
-
 					const eventType = form.dataset.event;
 					const textarea = form.querySelector("textarea");
 					const result = form.querySelector(".result");
-
 					try {
 						JSON.parse(textarea.value);
 						const response = await fetch(`/admin/trigger/${eventType}`, {
@@ -512,7 +1050,6 @@
 							headers: { "Content-Type": "application/json" },
 							body: textarea.value,
 						});
-
 						result.textContent = `${response.status} ${response.statusText}\n${await response.text()}`;
 					} catch (error) {
 						result.textContent = String(error);
@@ -520,6 +1057,102 @@
 				});
 			}
 
+			// ===== KICK =====
+			const kickWebhookForm = document.getElementById("kick-webhook-form");
+			const kickWebhookUrlInput = document.getElementById("kick-webhook-url");
+			const kickWebhookSecretInput = document.getElementById("kick-webhook-secret");
+			const kickWebhookResult = document.getElementById("kick-webhook-result");
+			const kickWebhookList = document.getElementById("kick-webhook-list");
+			const kickGenSecretBtn = document.getElementById("kick-gen-secret-btn");
+
+			kickGenSecretBtn.addEventListener("click", () => {
+				kickWebhookSecretInput.value = generateSecret();
+			});
+
+			for (const form of document.querySelectorAll("form[data-kick-event]")) {
+				form.addEventListener("submit", async (event) => {
+					event.preventDefault();
+					const eventType = form.dataset.kickEvent;
+					const textarea = form.querySelector("textarea");
+					const result = form.querySelector(".result");
+					try {
+						const body = JSON.parse(textarea.value);
+						const headers = { "Content-Type": "application/json" };
+						console.log("[Kick Trigger]", eventType, { headers, body });
+						const response = await fetch(`/admin/kick/trigger/${eventType}`, {
+							method: "POST",
+							headers,
+							body: textarea.value,
+						});
+						result.textContent = `${response.status} ${response.statusText}\n${await response.text()}`;
+					} catch (error) {
+						result.textContent = String(error);
+					}
+				});
+			}
+
+			async function loadKickWebhooks() {
+				try {
+					const { data } = await requestJSON("/admin/kick/webhooks", { method: "GET" });
+					if (!data || !data.data || data.data.length === 0) {
+						kickWebhookList.innerHTML = "<em>No webhooks configured</em>";
+						return;
+					}
+					kickWebhookList.innerHTML = data.data
+						.map(
+							(sub) => `
+							<div class="webhook-item">
+								<div class="url">${sub.url}</div>
+								<div class="events">Events: ${sub.event_types.join(", ")}</div>
+								<div>ID: ${sub.id}</div>
+								<button class="delete-btn danger" onclick="deleteKickWebhook('${sub.id}')">Delete</button>
+							</div>
+						`,
+						)
+						.join("");
+				} catch (error) {
+					kickWebhookList.innerHTML = `<em style="color:#fca5a5">${String(error)}</em>`;
+				}
+			}
+
+			async function deleteKickWebhook(id) {
+				try {
+					await requestJSON(`/admin/kick/webhooks/${id}`, { method: "DELETE" });
+					await loadKickWebhooks();
+				} catch (error) {
+					setResult(kickWebhookResult, String(error), true);
+				}
+			}
+
+			kickWebhookForm.addEventListener("submit", async (event) => {
+				event.preventDefault();
+				try {
+					const checkedEvents = Array.from(
+						document.querySelectorAll('input[name="kick-events"]:checked')
+					).map((cb) => cb.value);
+					if (checkedEvents.length === 0) {
+						setResult(kickWebhookResult, "Select at least one event", true);
+						return;
+					}
+					await requestJSON("/admin/kick/webhooks", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							url: kickWebhookUrlInput.value,
+							events: checkedEvents,
+							secret: kickWebhookSecretInput.value || undefined,
+						}),
+					});
+					setResult(kickWebhookResult, "Webhook added");
+					kickWebhookUrlInput.value = "";
+					kickWebhookSecretInput.value = "";
+					await loadKickWebhooks();
+				} catch (error) {
+					setResult(kickWebhookResult, String(error), true);
+				}
+			});
+
+			// Init
 			(async () => {
 				try {
 					await Promise.all([loadStreamState(), loadFollowState(), loadModeratorState()]);
@@ -531,6 +1164,7 @@
 					setResult(followStateResult, String(error), true);
 					setResult(moderatorStateResult, String(error), true);
 				}
+				await loadKickWebhooks();
 			})();
 		</script>
 	</body>
