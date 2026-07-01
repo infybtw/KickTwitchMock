@@ -49,6 +49,38 @@ Follow these steps to enable the mock server in your local Twir environment:
 go run ./cmd/main.go
 ```
 
+## Running with Docker Compose
+
+Build and start the container:
+
+```bash
+docker compose up -d --build
+```
+
+By default, the container uses bridge networking. If you need the mock server to reach services on `localhost` (e.g., Twir running on the host), use host networking instead. Remove the `ports` section and add `network_mode: host` to `docker-compose.yml`:
+
+```yaml
+services:
+  twitch-mock:
+      container_name: twitch-mock
+      image: ghcr.io/infybtw/twitchkickmock
+      build:
+        context: .
+        dockerfile: Dockerfile
+      network_mode: host
+      environment:
+        - SITE_BASE_URL=${SITE_BASE_URL:-http://localhost:3005}
+      healthcheck:
+        test:
+          ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:7777/health"]
+        interval: 5s
+        timeout: 3s
+        retries: 10
+        start_period: 10s
+```
+
+With `network_mode: host`, `localhost` in webhook URLs and API calls refers to the host machine directly.
+
 ## Fake Users
 
 The mock server comes pre-configured with two primary user accounts. Use these IDs and logins when testing features that require specific roles.
